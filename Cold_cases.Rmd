@@ -1,0 +1,98 @@
+---
+title: "Cold Cases"
+author: "Cheikhou Kane"
+date: "9/19/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+#Load Libraries and Data
+library(tidyverse)
+library(ggplot2)
+library(VGAM)
+library(r2d3)
+library(wesanderson)
+library(lubridate)
+library(knitr)
+
+crime <- read.csv("WashingtonPostCrimeData.csv")
+```
+
+#Basic EDA
+
+```{r}
+df <- crime %>% group_by(disposition) %>%
+  tally()
+
+ggplot(df, aes(x=reorder(disposition, n), y=n, fill = disposition)) + geom_bar(stat = "identity") +
+  scale_fill_manual(values=wes_palette(n=3, name="Zissou1")) + theme_classic() + coord_flip() +
+  xlab("Case Outcome") + ylab("Number of Cases") + ggtitle("Number of Cases by outcome") + theme(plot.title = element_text(hjust = 0.5)) + labs(fill = "Case Outcome") + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r}
+df <- crime %>% group_by(disposition, victim_sex) %>%
+  summarise(n = n()) %>%
+  mutate(freq = round( 100*(n / sum(n)), 2)) 
+
+ggplot(df, aes(x=disposition, y=freq, fill=victim_sex)) + geom_bar(stat='identity', position='dodge') + scale_fill_manual(values=wes_palette(n=3, name="Zissou1")) +
+  xlab("Disposition") + ylab("Percentage of Cases") + theme_classic()
+```
+
+
+It seems that few cases are closed without arrest. Let's dive deeper into such cases. 
+
+```{r}
+
+crime1 <- crime %>% 
+  mutate(disposition = factor(disposition, levels=c("Open/No arrest", "Closed without arrest", "Closed by arrest"), ordered=TRUE),
+         age = as.numeric(victim_age),
+         race = factor(victim_race),
+         sex = factor(victim_sex)
+  )
+
+```
+
+```{r}
+crime %>%
+  group_by(state) %>%
+  summarise(n = n()) %>%
+  mutate(freq = round( 100*(n / sum(n)), 2)) %>%
+  arrange(-freq)
+```
+
+
+```{r}
+fit1 <- vglm(disposition ~ lat + age + race * sex, data=crime1, family = cumulative(parallel = TRUE))
+anova(fit1)
+```
+
+```{r}
+coef(fit1, matrix = TRUE)
+```
+
+```{r}
+crime %>%
+  filter(state == "CA") %>%
+  summarise(mean.lat = mean(lat, na.rm = TRUE))
+```
+
+```{r}
+crime %>%
+  filter(state == "NY") %>%
+  summarise(mean.lat = mean(lat, na.rm = TRUE))
+```
+```{r}
+fit2 <- vglm(disposition ~ lat + lon + lat*lon  + race * sex, data=crime1, family = cumulative(parallel = TRUE))
+anova(fit2)
+```
+
+```{r}
+coef(fit2, matrix = TRUE)
+```
+
